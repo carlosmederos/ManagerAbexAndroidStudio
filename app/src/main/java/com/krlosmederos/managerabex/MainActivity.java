@@ -9,7 +9,8 @@ import java.net.URL;
 import java.util.Timer;
 import java.util.TimerTask;
 
-import android.support.v7.app.ActionBarActivity;
+//import android.support.v7.app.ActionBarActivity;
+import android.support.v7.app.AppCompatActivity;
 import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
@@ -19,23 +20,23 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.util.Log;
 
 
-public class MainActivity extends ActionBarActivity {
-
+//public class MainActivity extends ActionBarActivity {
+public class MainActivity extends AppCompatActivity {
     //CONSTANTES
     private static final int WAIT_TIMER = 5000;
-    private static final int WAIT_CONEXION = 3000;
+    private static final int WAIT_CONEXION = 12000;
     //DEBUG
-    private static final String IP_UIJ = "10.10.3.203";
-    private static final String WEB_UIJ = "http://intranet.uij.edu.cu/";
+//    private static final String IP_UIJ = "10.10.3.203";
+//    private static final String WEB_UIJ = "http://intranet.uij.edu.cu/";
 
     private Timer _timer;
     private TimerTask timerTask;
@@ -46,7 +47,7 @@ public class MainActivity extends ActionBarActivity {
     private static String _UrlCadlog;
     private static String _User;
 
-    private static final String LOG = MainActivity.class.getName();
+    private static final String TAG = MainActivity.class.getName();
 
     // Controles
     private TextView txtMensaje;
@@ -107,6 +108,7 @@ public class MainActivity extends ActionBarActivity {
 
     private boolean GetCadlogParams() {
         String path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/ConfigCadlogManager.txt";
+
         File fileEvents = new File(path);
         try {
             BufferedReader reader = new BufferedReader(new FileReader(fileEvents));
@@ -117,27 +119,23 @@ public class MainActivity extends ActionBarActivity {
             return true;
         }
         catch(IOException e) {
-	    Log.e(LOG, e.getMessage());
+            Log.e(TAG, e.getMessage());
             return false;
         }
     }
 
     private void GetUserIdFromUrl(String sUrl) {
-        if(_User.equals("") && sUrl.contains("sUser=")) {
+        if(_User.equals("") && sUrl.indexOf("sUser=") > -1) {
             _User = sUrl.split("\\?")[1].split("&")[0].substring(6);
         }
-        else if(sUrl.contains("Login")) {
+        else if(sUrl.indexOf("Login") > -1) {
             _User = "";
         }
     }
 
     private void LogOff(String sUserId) {
-    	/*
-    	 * Asi mismo esta en la aplicacion en C#
-    	 * no entinendo el uso de sUserId
-    	 */
         try {
-            if(sUserId.equals("")) {
+            if(sUserId == "") {
                 String cad_url = _UrlCadlog + "/Administracion/Menu?sUser=" + _User + "&LogOff=true&iOpcion=-1";
 
                 URL url = new URL(cad_url);
@@ -147,7 +145,7 @@ public class MainActivity extends ActionBarActivity {
             }
         }
         catch(Exception e) {
-	    Log.e(LOG, e.getMessage());
+            Log.e(TAG, e.getMessage());
         }
     }
 
@@ -186,12 +184,11 @@ public class MainActivity extends ActionBarActivity {
                     webView.setVisibility(View.INVISIBLE);
                 }
                 if(isOnline(getApplicationContext())) {
-		    Log.i(LOG, "Conectado");
-                    // Lanzar un hilo para hacer ping
-                    new PingAsyncTask().execute();
+                    new SiteAsyncTask().execute();
+                    Log.i(TAG, "Conectado");
                 }
                 else {
-		    Log.e(LOG, "No hay conexion");
+                    Log.e(TAG, "No hay conexion");
                     _intentosConexion++;
                     txtMensaje.setText("DISPOSITIVO SIN CONEXION...");
                     webView.setVisibility(View.INVISIBLE);
@@ -199,7 +196,7 @@ public class MainActivity extends ActionBarActivity {
                 }
             }
             else {
-		Log.e(LOG, "Error en archivo de configuracion");
+                Log.e(TAG, "Error en archivo de configuracion");
                 _intentosConexion++;
                 txtMensaje.setVisibility(View.VISIBLE);
                 txtMensaje.setText("REVISAR ARCHIVO DE CONFIGURACION...");
@@ -207,7 +204,7 @@ public class MainActivity extends ActionBarActivity {
             }
         }
         catch(Exception e) {
-	    Log.e(LOG, e.getMessage());
+            Log.e(TAG, e.getMessage());
             _intentosConexion++;
             webView.setVisibility(View.INVISIBLE);
             txtMensaje.setVisibility(View.VISIBLE);
@@ -242,62 +239,14 @@ public class MainActivity extends ActionBarActivity {
             _intentosConexion = 0;
             webView.setVisibility(View.VISIBLE);
             txtMensaje.setVisibility(View.INVISIBLE);
-            GetUserIdFromUrl(url);
+            GetUserIdFromUrl(url.toString());
             //Toast.makeText(getApplicationContext(), "Sitio cargado completamente", Toast.LENGTH_SHORT).show();
         }
     }
 
-    public class PingAsyncTask extends AsyncTask<Void, Void, Integer> {
-        /*
-         * Clase para lanzar un hilo secundario para testear el server
-         * y de esa forma no bloquear el hilo principal (UI Thread)
-         */
-        @Override
-        protected Integer doInBackground(Void... params) {
-            try {
-                Runtime runtime = Runtime.getRuntime();
-                Process proc = runtime.exec("ping -c 1 " + _PingCadlog);
-                proc.waitFor();
-                //proc.wait(WAIT_TIMER);
-                int exit = proc.exitValue();
-                return exit;
-            }
-            catch(Exception e) {
-		Log.e(LOG, e.getMessage());
-                return -1;
-            }
-        }
-
-        @Override
-        protected void onPostExecute(Integer okPing) {
-        	/*
-        	 * Este metodo se ejecuta en el hilo principal despues de terminado
-        	 * el hilo secundario de la clase por lo que
-        	 * tiene acceso a todos los controles de la UI
-        	 */
-            if(okPing != 0){
-                _intentosConexion++;
-                txtMensaje.setText("RECONECTANDO SERVIDOR ("+_intentosConexion+")...");
-                webView.setVisibility(View.INVISIBLE);
-                txtMensaje.setVisibility(View.VISIBLE);
-            }
-            else {
-		Log.i(LOG, "Ping OK");
-                // Lanzar hilo para verificar conexion con el sitio
-                new SiteAsyncTask().execute();
-            }
-        }
-
-        @Override
-        protected void onPreExecute() {}
-
-        @Override
-        protected void onProgressUpdate(Void... values) {}
-
-    }
-
-
     public class SiteAsyncTask extends AsyncTask<Void, Void, Boolean> {
+
+        private String siteIp;
         /*
          * Clase para lanzar un hilo secundario para testear el sitio
          * y de esa forma no bloquear el hilo principal (UI Thread)
@@ -305,7 +254,7 @@ public class MainActivity extends ActionBarActivity {
         @Override
         protected Boolean doInBackground(Void... params) {
             try {
-                URL url = new URL(_UrlCadlog);
+                URL url = new URL(siteIp);
                 HttpURLConnection urlc = (HttpURLConnection) url.openConnection();
                 urlc.setConnectTimeout(WAIT_CONEXION);
                 urlc.connect();
@@ -313,7 +262,7 @@ public class MainActivity extends ActionBarActivity {
                 return (urlc.getResponseCode() == urlc.HTTP_OK);
             }
             catch(Exception e) {
-		Log.e(LOG, e.getMessage());
+                Log.e(TAG, e.getMessage());
                 return false;
             }
 
@@ -328,7 +277,8 @@ public class MainActivity extends ActionBarActivity {
                 txtMensaje.setVisibility(View.VISIBLE);
             }
             else {
-		Log.i(LOG, "Respuesta de Sitio OK");
+                Log.i(TAG, "Respuesta de Sitio OK");
+                _UrlCadlog = siteIp;
                 if(_intentosConexion != 0) {  				// En caso que se haya perdido la conexion en algun
                     String direccion = webView.getUrl();	// momento vuelvo a cargar el sitio que estaba en el webView
                     if(direccion != null)
@@ -343,7 +293,9 @@ public class MainActivity extends ActionBarActivity {
         }
 
         @Override
-        protected void onPreExecute() {}
+        protected void onPreExecute() {
+            siteIp =  _UrlCadlog;
+        }
 
         @Override
         protected void onProgressUpdate(Void... values) {}
